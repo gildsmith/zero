@@ -46,5 +46,5 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "bin": ["gildsmith"]
+    "bin": ["../zero-test/anvil"]
 }
