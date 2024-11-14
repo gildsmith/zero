@@ -1,22 +1,22 @@
 {
-    "name": "laravel-zero/laravel-zero",
-    "description": "The Laravel Zero Framework.",
-    "keywords": ["framework", "laravel", "laravel zero", "console", "cli"],
-    "homepage": "https://laravel-zero.com",
+    "name": "gildsmith/anvil",
+    "description": "Gildsmith CLI Dev Tools",
+    "keywords": ["framework", "laravel", "laravel zero", "console", "cli", "gildsmith", "devtools"],
+    "homepage": "https://gildsmith.dev/",
     "type": "project",
     "license": "MIT",
     "support": {
-        "issues": "https://github.com/laravel-zero/laravel-zero/issues",
-        "source": "https://github.com/laravel-zero/laravel-zero"
+        "issues": "https://github.com/gildsmith/anvil/issues",
+        "source": "https://github.com/gildsmith/anvil"
     },
     "authors": [
         {
-            "name": "Nuno Maduro",
-            "email": "enunomaduro@gmail.com"
+            "name": "Mateusz Chmielewski",
+            "email": "hello@itsmattch.com"
         }
     ],
     "require": {
-        "php": "^8.2.0",
+        "php": "^8.3.0",
         "laravel-zero/framework": "^11.0.2"
     },
     "require-dev": {
@@ -26,9 +26,7 @@
     },
     "autoload": {
         "psr-4": {
-            "App\\": "app/",
-            "Database\\Factories\\": "database/factories/",
-            "Database\\Seeders\\": "database/seeders/"
+            "App\\": "app/"
         }
     },
     "autoload-dev": {
@@ -46,5 +44,10 @@
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
-    "bin": ["../zero-test/anvil"]
+    "bin": ["anvil"],
+    "scripts": {
+        "post-create-project-cmd": [
+            "php anvil init"
+        ]
+    }
 }
