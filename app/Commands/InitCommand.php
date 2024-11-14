@@ -15,21 +15,30 @@ class InitCommand extends Command
         $this->info('Setting up the Gildsmith environment...');
 
         $tasks = [
+            /* Core project */
             'Pulling project' => fn() => $this->pullProject(),
+            'Copying .env file' => fn() => $this->copyEnvFile(),
+            'Regenerating the application key' => fn() => $this->regenerateAppKey(),
+
+            /* Development environment */
             'Creating directories' => fn() => $this->createDirectories(),
+
+            /* Composer */
             'Modifying composer.json' => fn() => $this->modifyComposerJson(),
-            'Modifying package.json' => fn() => $this->modifyNpmJson(),
+            'Pulling default packages' => fn() => $this->pullPackages(),
             'Installing Composer dependencies' => fn() => $this->installComposerDependencies(),
+
+            /* NPM */
+            'Modifying package.json' => fn() => $this->modifyNpmJson(),
             'Installing NPM dependencies' => fn() => $this->installNpmDependencies(),
         ];
 
-        // Iterate over tasks and display a progress bar
         $totalTasks = count($tasks);
         $currentTask = 1;
 
         foreach ($tasks as $key => $task) {
             $this->newLine();
-            $this->info("($currentTask/$totalTasks) $key...");
+            $this->line("($currentTask/$totalTasks) $key...");
             $task();
             $currentTask++;
         }
@@ -38,63 +47,101 @@ class InitCommand extends Command
         $this->info('Gildsmith environment setup complete.');
     }
 
-    /**
-     * Clones the project repository from GitHub.
-     */
     protected function pullProject(): void
     {
-        // Skip the step if the directory already exists.
         if (is_dir('gildsmith')) {
-            $this->warn("'gildsmith' directory already exists.");
+            $this->warn("'gildsmith' directory already exists. Skipping.");
             return;
         }
 
-        // Clone the directory
-        $this->info('Cloning the Gildsmith project from GitHub...');
         $process = new Process(['git', 'clone', 'git@github.com:gildsmith/gildsmith.git', 'gildsmith']);
         $process->run($this->processOutputHandler());
 
-        // Output
         $process->isSuccessful()
             ? $this->error('Failed to clone the repository.')
             : $this->info('Project cloned successfully.');
     }
 
-    /**
-     * Function to handle process output based on verbose mode.
-     */
     protected function processOutputHandler(): callable
     {
-        return function ($type, $buffer) {
+        return function ($type, $buffer): void {
             if ($this->output->isVerbose()) {
                 echo $buffer;
             }
         };
     }
 
-    /**
-     * Creates the necessary directories for the project.
-     */
+    protected function copyEnvFile(): void
+    {
+        $envPath = 'gildsmith/.env';
+        $envExamplePath = 'gildsmith/.env.example';
+
+        if (file_exists($envPath)) {
+            $this->warn(".env file already exists. Skipping.");
+            return;
+        }
+
+        if (!file_exists($envExamplePath)) {
+            $this->error(".env.example file not found. Skipping.");
+            return;
+        }
+
+        copy($envExamplePath, $envPath)
+            ? $this->info(".env file created successfully from .env.example.")
+            : $this->error("Failed to copy .env.example to .env.");
+    }
+
+    protected function regenerateAppKey(): void
+    {
+        $keyGenerateProcess = new Process(['php', 'artisan', 'key:generate'], 'gildsmith');
+        $keyGenerateProcess->run($this->processOutputHandler());
+
+        $keyGenerateProcess->isSuccessful()
+            ? $this->info('Application key regenerated successfully.')
+            : $this->error('Failed to regenerate the application key.');
+    }
+
     protected function createDirectories(): void
     {
         $directories = ['packages/composer', 'packages/npm'];
 
         foreach ($directories as $directory) {
             if (is_dir($directory)) {
-                $this->warn("'$directory' directory already exists.");
-
-            } elseif (mkdir($directory, 0755, true)) {
-                $this->info("Created '$directory' directory.");
+                $this->warn("'$directory' directory already exists. Skipping.");
 
             } else {
-                $this->error("Failed to create '$directory' directory.");
+                mkdir($directory, 0755, true)
+                    ? $this->info("Created '$directory' directory.")
+                    : $this->error("Failed to create '$directory' directory.");
             }
         }
     }
 
-    /**
-     * Modifies the composer.json to include custom repository configuration.
-     */
+    protected function pullPackages(): void
+    {
+        $repositories = [
+            'core-api' => 'git@github.com:gildsmith/core-api.git',
+            'profile-api' => 'git@github.com:gildsmith/profile-api.git',
+        ];
+
+        foreach ($repositories as $name => $repo) {
+            $targetDir = "packages/composer/gildsmith/$name";
+
+            if (is_dir($targetDir)) {
+                $this->warn("Directory '$targetDir' already exists. Skipping.");
+                continue;
+            }
+
+            $this->info("Cloning $name into $targetDir...");
+            $cloneProcess = new Process(['git', 'clone', $repo, $targetDir]);
+            $cloneProcess->run($this->processOutputHandler());
+
+            $cloneProcess->isSuccessful()
+                ? $this->info("Cloned $name successfully.")
+                : $this->error("Failed to clone $name.");
+        }
+    }
+
     protected function modifyComposerJson(): void
     {
         $composerJsonPath = 'gildsmith/composer.json';
@@ -105,14 +152,11 @@ class InitCommand extends Command
             'symlink' => true
         ];
 
-        // Skip the step if composer.json doesn't exist
         if (!file_exists($composerJsonPath)) {
             $this->error("composer.json not found at $composerJsonPath.");
             return;
         }
 
-        // Following code checks whether composer.json includes
-        // local repository, and adds it if it doesn't.
         $composerJson = json_decode(file_get_contents($composerJsonPath), true);
 
         if (!isset($composerJson['repositories'])) {
@@ -130,32 +174,25 @@ class InitCommand extends Command
             $this->info('Appended the repository configuration to composer.json.');
 
         } else {
-            $this->warn('The repository configuration already exists in composer.json.');
+            $this->warn('The repository configuration already exists in composer.json. Skipping.');
         }
     }
 
-    /**
-     * Modifies the package.json to include custom workspace configuration.
-     */
     protected function modifyNpmJson(): void
     {
         $packageJsonPath = 'gildsmith/package.json';
         $workspacePath = '../packages/npm/*/*';
 
-        // Skip the step if package.json doesn't exist
         if (!file_exists($packageJsonPath)) {
             $this->error("package.json not found at $packageJsonPath.");
             return;
         }
 
-        // Following code checks whether package.json includes
-        // local workspace, and adds it if it doesn't.
         $packageJson = json_decode(file_get_contents($packageJsonPath), true);
 
         if (!isset($packageJson['workspaces'])) {
             $packageJson['workspaces'] = [];
         }
-
 
         if (!in_array($workspacePath, $packageJson['workspaces'])) {
             $packageJson['workspaces'][] = $workspacePath;
@@ -163,13 +200,10 @@ class InitCommand extends Command
             $this->info('Appended the workspace configuration to package.json.');
 
         } else {
-            $this->warn('The workspace configuration already exists in package.json.');
+            $this->warn('The workspace configuration already exists in package.json. Skipping.');
         }
     }
 
-    /**
-     * Installs Composer dependencies.
-     */
     protected function installComposerDependencies(): void
     {
         $process = new Process(['composer', 'install'], 'gildsmith');
@@ -180,9 +214,6 @@ class InitCommand extends Command
             : $this->error('Failed to install Composer dependencies.');
     }
 
-    /**
-     * Installs NPM dependencies.
-     */
     protected function installNpmDependencies(): void
     {
         $process = new Process(['npm', 'install'], 'gildsmith');
